@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme -->
+    <style name="Theme.VyronOS" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#030303</item>
+        <item name="android:statusBarColor">#030303</item>
+        <item name="android:navigationBarColor">#030303</item>
+    </style>
+
+    <!-- Translucent assistant theme for bottom-sheet overlays -->
+    <style name="Theme.Theme.VyronOS.TranslucentOverlay" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.5</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <style name="Theme.VyronOS.TranslucentOverlay" parent="Theme.Theme.VyronOS.TranslucentOverlay" />
+</resources>

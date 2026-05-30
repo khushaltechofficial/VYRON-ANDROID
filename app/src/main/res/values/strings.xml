@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">VYRON OS</string>
+    <string name="accessibility_service_description">VYRON OS Automation Service is required to automate hands-free tasks: instantly returning to the home screen, locking the device securely, opening the power dialog, and enabling smart WhatsApp/Camera messaging shortcuts.</string>
+</resources>
