@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "com.vyron.os"
-        minSdk = 26
+        minSdk = 31
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
@@ -85,8 +85,8 @@ dependencies {
     // Security & Encrypted SharedPreferences
     implementation("androidx.security:security-crypto:1.0.0")
 
-    // Picovoice Porcupine Wake Word Engine
-    implementation("ai.picovoice:porcupine-android:3.0.2")
+    // Microsoft ONNX Runtime for openWakeWord offline inference
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
 
 
     // CameraX (For hands-free photo taking, shutter control, camera switching)

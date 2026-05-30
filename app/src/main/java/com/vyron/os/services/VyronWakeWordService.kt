@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
@@ -24,14 +25,15 @@ class VyronWakeWordService : Service() {
         const val ACTION_STOP_LISTENING  = "com.vyron.os.action.STOP_LISTENING"
     }
 
-    private var porcupineDetector: PorcupineWakeWordDetector? = null
+    private var openWakeWordDetector: OpenWakeWordDetector? = null
     private var isListeningActive = false
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
-        initPorcupine()
+        initOpenWakeWord()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -50,16 +52,16 @@ class VyronWakeWordService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun initPorcupine() {
-        porcupineDetector = PorcupineWakeWordDetector(
+    private fun initOpenWakeWord() {
+        openWakeWordDetector = OpenWakeWordDetector(
             context = this,
             onWakeWordDetected = {
-                Log.d(TAG, "Offline Wake word detected!")
+                Log.d(TAG, "Offline Wake word detected via openWakeWord!")
                 stopListening()
                 launchOverlay()
             },
-            onApiFailure = { error ->
-                Log.e(TAG, "Porcupine API failure: $error")
+            onFailure = { error ->
+                Log.e(TAG, "openWakeWord failure: $error")
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                     Toast.makeText(this, "Wake Word Engine Error: $error", Toast.LENGTH_LONG).show()
                 }
@@ -69,16 +71,50 @@ class VyronWakeWordService : Service() {
 
     private fun startListening() {
         if (isListeningActive) return
-        porcupineDetector?.start()
+        
+        acquireWakeLock()
+        openWakeWordDetector?.start()
         isListeningActive = true
-        Log.d(TAG, "Continuous offline wake word listening started.")
+        Log.d(TAG, "Continuous offline openWakeWord listening started.")
     }
 
     private fun stopListening() {
         if (!isListeningActive) return
-        porcupineDetector?.stop()
+        
+        openWakeWordDetector?.stop()
+        releaseWakeLock()
         isListeningActive = false
-        Log.d(TAG, "Continuous offline wake word listening stopped.")
+        Log.d(TAG, "Continuous offline openWakeWord listening stopped.")
+    }
+
+    private fun acquireWakeLock() {
+        try {
+            if (wakeLock == null) {
+                val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+                wakeLock = powerManager.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "VyronOS::WakeWordServiceWakeLock"
+                ).apply {
+                    acquire()
+                }
+                Log.d(TAG, "Partial WakeLock acquired.")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire WakeLock", e)
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+                Log.d(TAG, "WakeLock released.")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to release WakeLock", e)
+        } finally {
+            wakeLock = null
+        }
     }
 
     private fun launchOverlay() {

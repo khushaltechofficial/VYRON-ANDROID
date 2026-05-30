@@ -93,11 +93,11 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 
-class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
+class VyronOverlayActivity : ComponentActivity() {
 
     private var speechRecognizer: SpeechRecognizer? = null
     private var recognizerIntent: Intent? = null
-    private var tts: TextToSpeech? = null
+    private var vyronTTS: com.vyron.os.tts.VyronTTS? = null
     private var audioManager: AudioManager? = null
     
     private val BEEP_STREAMS = intArrayOf(
@@ -108,9 +108,6 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     )
     private val savedOverlayVolumes = mutableMapOf<Int, Int>()
     private var isMuted = false
-
-    private var isTtsInitialized = false
-    private val pendingSpeechQueue = mutableListOf<String>()
 
     private var userSpeech by mutableStateOf("Listening...")
     private var vyronReply by mutableStateOf("")
@@ -128,7 +125,18 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         )
 
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        tts = TextToSpeech(this, this, "com.google.android.tts")
+        vyronTTS = com.vyron.os.tts.VyronTTS(
+            context = this,
+            onSpeechStatusChanged = { status ->
+                currentStatus = status
+            },
+            onSpeechFinished = { utteranceId ->
+                handleSpeechFinished(utteranceId)
+            },
+            onSpeechError = { utteranceId ->
+                handleSpeechError(utteranceId)
+            }
+        )
         
         // Stop background wake listener so this overlay has exclusive mic access
         stopBackgroundWakeService()
@@ -179,114 +187,33 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-
-
-
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            val currentLocale = Locale.getDefault()
-            val result = tts?.setLanguage(currentLocale)
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                Log.w(TAG, "Default locale not supported by TTS. Falling back to US English.")
-                tts?.language = Locale.US
+    private fun handleSpeechFinished(utteranceId: String) {
+        android.os.Handler(mainLooper).post {
+            when (utteranceId) {
+                "VyronGreetingID" -> {
+                    android.os.Handler(mainLooper).postDelayed({
+                        userSpeech = "Listening..."
+                        vyronReply = ""
+                        currentStatus = "LISTENING"
+                        initializeSpeechRecognizer()
+                    }, 500L)
+                }
+                "VyronSpeechID" -> {
+                    android.os.Handler(mainLooper).postDelayed({
+                        closeOverlay()
+                    }, 2000L)
+                }
             }
+        }
+    }
 
-            // Set warmer and friendlier tone qualities
-            // Warm, whisper-like friendly tone and rate
-            tts?.setPitch(1.05f)     // Warmer companion frequency
-            tts?.setSpeechRate(0.92f) // Relaxed conversational cadence
-
-            // Try selecting a high-quality Google neural/wavenet voice if available
-            try {
-                val voices = tts?.voices
-                if (!voices.isNullOrEmpty()) {
-                    val targetLang = tts?.language?.language ?: currentLocale.language
-                    // Prioritize premium Wavernet/Neural voices with "-x-" in their names, and look for female variants
-                    val bestVoice = voices.find { voice ->
-                        voice.locale.language == targetLang &&
-                        voice.name.contains("-x-", ignoreCase = true) &&
-                        (voice.name.contains("female", ignoreCase = true) || voice.name.contains("fem", ignoreCase = true))
-                    } ?: voices.find { voice ->
-                        voice.locale.language == targetLang &&
-                        voice.name.contains("-x-", ignoreCase = true)
-                    } ?: voices.find { voice ->
-                        voice.locale.language == targetLang &&
-                        (voice.name.contains("female", ignoreCase = true) || voice.name.contains("network", ignoreCase = true))
-                    } ?: voices.find { it.locale.language == targetLang }
-                    
-                    if (bestVoice != null) {
-                        tts?.voice = bestVoice
-                        Log.d(TAG, "Selected friendly premium voice: ${bestVoice.name}")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to select specific friendly voice profile, using default.", e)
+    private fun handleSpeechError(utteranceId: String) {
+        android.os.Handler(mainLooper).post {
+            if (utteranceId == "VyronGreetingID") {
+                initializeSpeechRecognizer()
+            } else {
+                closeOverlay()
             }
-
-            // Set UtteranceProgressListener to handle voice state transitions
-            tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) {
-                    Log.d(TAG, "TTS Started: $utteranceId")
-                    currentStatus = "SPEAKING"
-                }
-
-                override fun onDone(utteranceId: String?) {
-                    Log.d(TAG, "TTS Completed: $utteranceId")
-                    when (utteranceId) {
-                        "VyronGreetingID" -> {
-                            android.os.Handler(mainLooper).post {
-                                android.os.Handler(mainLooper).postDelayed({
-                                    userSpeech = "Listening..."
-                                    vyronReply = ""
-                                    currentStatus = "LISTENING"
-                                    initializeSpeechRecognizer()
-                                }, 500L)
-                            }
-                        }
-                        "VyronSpeechID" -> {
-                            android.os.Handler(mainLooper).post {
-                                android.os.Handler(mainLooper).postDelayed({
-                                    closeOverlay()
-                                }, 2000L)
-                            }
-                        }
-                    }
-                }
-
-                @Deprecated("Deprecated in Java")
-                override fun onError(utteranceId: String?) {
-                    Log.e(TAG, "TTS Error: $utteranceId")
-                    android.os.Handler(mainLooper).post {
-                        if (utteranceId == "VyronGreetingID") {
-                            initializeSpeechRecognizer()
-                        } else {
-                            closeOverlay()
-                        }
-                    }
-                }
-
-                override fun onError(utteranceId: String?, errorCode: Int) {
-                    Log.e(TAG, "TTS Error ($errorCode): $utteranceId")
-                    android.os.Handler(mainLooper).post {
-                        if (utteranceId == "VyronGreetingID") {
-                            initializeSpeechRecognizer()
-                        } else {
-                            closeOverlay()
-                        }
-                    }
-                }
-            })
-
-            // Mark as initialized and flush pending requests (Bug 16)
-            isTtsInitialized = true
-            synchronized(pendingSpeechQueue) {
-                for (pendingSpeech in pendingSpeechQueue) {
-                    speakReply(pendingSpeech)
-                }
-                pendingSpeechQueue.clear()
-            }
-        } else {
-            Log.e(TAG, "TextToSpeech initialization failed with status: $status")
         }
     }
 
@@ -865,60 +792,7 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         vyronReply = replyText
         currentStatus = "SPEAKING"
         unmuteBeep()
-
-        val securePref = com.vyron.os.getSecureSharedPreferences(this)
-        val ttsApiKey = securePref.getString("google_tts_api_key", "") ?: ""
-
-        if (ttsApiKey.isNotEmpty()) {
-            lifecycleScope.launch(Dispatchers.Main) {
-                // Speak using the high-definition Cloud Chirp3-HD Fenrir voice!
-                val success = com.vyron.os.automation.GoogleTTS.speak(this@VyronOverlayActivity, replyText, ttsApiKey)
-                
-                if (success) {
-                    // Greeting done -> 500ms wait -> listening start
-                    if (utteranceId == "VyronGreetingID") {
-                        android.os.Handler(mainLooper).postDelayed({
-                            userSpeech = "Listening..."
-                            vyronReply = ""
-                            currentStatus = "LISTENING"
-                            initializeSpeechRecognizer()
-                        }, 500L)
-                    } else if (utteranceId == "VyronSpeechID") {
-                        if (closeAfter) {
-                            // Speech done -> 2000ms wait -> close
-                            android.os.Handler(mainLooper).postDelayed({
-                                closeOverlay()
-                            }, 2000L)
-                        }
-                    }
-                } else {
-                    Log.e(TAG, "GoogleTTS synthesis failed, falling back to local TTS engine.")
-                    speakLocalFallback(replyText, utteranceId, closeAfter)
-                }
-            }
-        } else {
-            speakLocalFallback(replyText, utteranceId, closeAfter)
-        }
-    }
-
-    private fun speakLocalFallback(
-        replyText: String,
-        utteranceId: String,
-        closeAfter: Boolean
-    ) {
-        if (!isTtsInitialized) {
-            synchronized(pendingSpeechQueue) {
-                pendingSpeechQueue.add(replyText)
-            }
-            vyronReply = replyText
-            currentStatus = "THINKING"
-            return
-        }
-
-        val params = Bundle().apply {
-            putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
-        }
-        tts?.speak(replyText, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
+        vyronTTS?.speak(replyText, utteranceId, closeAfter)
 
         // Safe maximum backup safety delay
         if (utteranceId == "VyronSpeechID" && closeAfter) {
@@ -942,8 +816,7 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         super.onDestroy()
         mHandler.removeCallbacksAndMessages(null) // Prevent Handler leaks (Bug 17)
         speechRecognizer?.destroy()
-        tts?.stop()
-        tts?.shutdown()
+        vyronTTS?.shutdown()
         unmuteBeep()
         
         // Resume background wake-word listening loop

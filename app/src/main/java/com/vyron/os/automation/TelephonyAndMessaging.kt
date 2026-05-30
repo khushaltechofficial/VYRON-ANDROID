@@ -145,28 +145,12 @@ object TelephonyAndMessaging {
 
     // 5. Smart Contact Lookup (Resolves names to numbers, handling conflicts)
     private fun resolveContactNumber(context: Context, name: String): String? {
-        val cursor: Cursor? = context.contentResolver.query(
-            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-            arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME),
-            "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?",
-            arrayOf("%$name%"),
-            null
-        )
-        
-        var resolvedNumber: String? = null
-        cursor?.use {
-            if (it.moveToFirst()) {
-                val numIdx = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                resolvedNumber = it.getString(numIdx)
-                
-                // Smart select logic: If multiple entries, Log names or pick first
-                val count = it.count
-                if (count > 1) {
-                    Log.d("VyronContacts", "Multiple contact matches found for $name. Selecting first match: $resolvedNumber")
-                }
-            }
+        val matches = com.vyron.os.utils.ContactResolver.resolve(context, name)
+        if (matches.isEmpty()) return null
+        if (matches.size > 1) {
+            Log.d("VyronContacts", "Multiple matching contacts found for '$name': ${matches.joinToString { "${it.name} (${it.phoneNumber})" }}. Selecting first match.")
         }
-        return resolvedNumber
+        return matches.first().phoneNumber
     }
 
     // 6. Google Maps: Start Turn-by-Turn Navigation
@@ -210,27 +194,12 @@ object TelephonyAndMessaging {
 
     // 10. Spotify: Search and Play music tracks
     fun playSpotifySong(context: Context, songQuery: String) {
-        try {
-            val intent = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
-                putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
-                putExtra(MediaStore.EXTRA_MEDIA_ARTIST, "")
-                putExtra(MediaStore.EXTRA_MEDIA_TITLE, songQuery)
-                putExtra("query", songQuery)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(intent)
-
-        } catch (e: Exception) {
-            // Launch Spotify package fallback
-            launchApp(context, "Spotify")
-        }
+        MusicController.playSpotify(context, songQuery)
     }
 
     // 11. Spotify: Resume last playing media
     fun resumeSpotifyPlayback(context: Context) {
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val event = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY)
-        audioManager.dispatchMediaKeyEvent(event)
+        MusicController.resume(context)
     }
 
     // 12. App Launcher: Launch any app instantly by name
