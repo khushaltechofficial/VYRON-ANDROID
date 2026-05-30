@@ -99,9 +99,14 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var recognizerIntent: Intent? = null
     private var tts: TextToSpeech? = null
     private var audioManager: AudioManager? = null
-    private var originalMusicVolume = -1
-    private var originalSystemVolume = -1
-    private var originalNotificationVolume = -1
+    
+    private val BEEP_STREAMS = intArrayOf(
+        AudioManager.STREAM_SYSTEM,
+        AudioManager.STREAM_DTMF,
+        AudioManager.STREAM_NOTIFICATION,
+        AudioManager.STREAM_RING
+    )
+    private val savedOverlayVolumes = mutableMapOf<Int, Int>()
     private var isMuted = false
 
     private var isTtsInitialized = false
@@ -123,7 +128,7 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         )
 
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        tts = TextToSpeech(this, this)
+        tts = TextToSpeech(this, this, "com.google.android.tts")
         
         // Stop background wake listener so this overlay has exclusive mic access
         stopBackgroundWakeService()
@@ -238,7 +243,9 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                         }
                         "VyronSpeechID" -> {
                             android.os.Handler(mainLooper).post {
-                                closeOverlay()
+                                android.os.Handler(mainLooper).postDelayed({
+                                    closeOverlay()
+                                }, 1000L)
                             }
                         }
                     }
@@ -288,39 +295,23 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     private fun muteBeep() {
         if (isMuted) return
-        try {
-            audioManager?.let { am ->
-                // Check if current ringer mode is normal
-                val currentRingerMode = am.ringerMode
-                if (currentRingerMode == AudioManager.RINGER_MODE_NORMAL) {
-                    originalSystemVolume = am.getStreamVolume(AudioManager.STREAM_SYSTEM)
-                    // Set to 1 instead of 0 to keep system normal ringer mode unchanged
-                    am.setStreamVolume(AudioManager.STREAM_SYSTEM, 1, 0)
-                    isMuted = true
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to mute streams", e)
+        BEEP_STREAMS.forEach { stream ->
+            try {
+                savedOverlayVolumes[stream] = 
+                    audioManager?.getStreamVolume(stream) ?: 0
+                audioManager?.setStreamVolume(stream, 0, 0)
+            } catch (e: Exception) {}
         }
+        isMuted = true
     }
 
     private fun unmuteBeep() {
         if (!isMuted) return
-        try {
-            audioManager?.let { am ->
-                try {
-                    val currentRingerMode = am.ringerMode
-                    if (currentRingerMode == AudioManager.RINGER_MODE_NORMAL && originalSystemVolume != -1) {
-                        am.setStreamVolume(AudioManager.STREAM_SYSTEM, originalSystemVolume, 0)
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to restore system stream volume", e)
-                }
-                isMuted = false
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to unmute streams", e)
+        savedOverlayVolumes.forEach { (stream, vol) ->
+            try { audioManager?.setStreamVolume(stream, vol, 0) } catch (e: Exception) {}
         }
+        savedOverlayVolumes.clear()
+        isMuted = false
     }
 
     private fun initializeSpeechRecognizer() {
@@ -353,12 +344,31 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 Log.e(TAG, "Recognizer error: $error")
                 mHandler.removeCallbacks(unmuteRunnable)
                 unmuteBeep()
-                if (error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || error == SpeechRecognizer.ERROR_NO_MATCH) {
-                    currentStatus = "IDLE"
-                    userSpeech = "Didn't catch that"
-                    vyronReply = "Tap 'Tap to Speak' below or background to dismiss."
-                } else {
-                    closeOverlay()
+                when (error) {
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
+                    SpeechRecognizer.ERROR_NO_MATCH -> {
+                        currentStatus = "IDLE"
+                        userSpeech = "Didn't catch that, Boss"
+                        vyronReply = "Tap mic to try again."
+                    }
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> {
+                        // Recognizer busy — 500ms baad retry
+                        android.os.Handler(mainLooper).postDelayed({
+                            try {
+                                speechRecognizer?.cancel()
+                            } catch (_: Exception) {}
+                            startListening()
+                        }, 500)
+                    }
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> {
+                        speakReply("Microphone permission required Boss.")
+                    }
+                    else -> {
+                        // Minor error — retry
+                        android.os.Handler(mainLooper).postDelayed({
+                            startListening()
+                        }, 1000)
+                    }
                 }
             }
 
@@ -372,8 +382,8 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     processUserCommand(speech)
                 } else {
                     currentStatus = "IDLE"
-                    userSpeech = "Didn't catch that"
-                    vyronReply = "Tap 'Tap to Speak' below or background to dismiss."
+                    userSpeech = "Didn't catch that, Boss"
+                    vyronReply = "Tap mic to try again."
                 }
             }
 
@@ -809,10 +819,11 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         }
         tts?.speak(replyText, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
 
-        // Safe maximum backup safety delay of 12 seconds in case UtteranceProgressListener hangs (Bug 2)
+        // Safe maximum backup safety delay of 25 seconds or proportional to length (whichever is larger) in case UtteranceProgressListener hangs
         if (utteranceId == "VyronSpeechID") {
             mHandler.removeCallbacks(closeOverlayRunnable)
-            mHandler.postDelayed(closeOverlayRunnable, 12000)
+            val safetyDelay = maxOf(25000L, replyText.length * 100L)
+            mHandler.postDelayed(closeOverlayRunnable, safetyDelay)
         }
     }
 
