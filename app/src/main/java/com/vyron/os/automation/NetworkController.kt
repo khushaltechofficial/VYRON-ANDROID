@@ -92,4 +92,54 @@ object NetworkController {
             }
         }
     }
+
+    fun toggleMobileData(context: Context): String {
+        return try {
+            val intent = Intent(Settings.ACTION_DATA_ROAMING_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            "Opening Mobile Data Settings for you, Boss."
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to open Mobile Data settings", e)
+            "Failed to access Mobile Data controls."
+        }
+    }
+
+    fun toggleHotspot(context: Context): String {
+        return try {
+            val intent = Intent().apply {
+                action = Intent.ACTION_MAIN
+                setClassName("com.android.settings", "com.android.settings.TetherSettings")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            "Opening Hotspot & Tethering Settings, Sir."
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to open Hotspot settings", e)
+            try {
+                val intent = Intent(Settings.ACTION_WIRELESS_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+                "Opening Network & Internet settings, Boss."
+            } catch (ex: Exception) {
+                "Failed to access Hotspot controls."
+            }
+        }
+    }
+
+    fun toggleAirplaneMode(context: Context): String {
+        return try {
+            val intent = Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            "Opening Airplane Mode Settings, Boss."
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to open Airplane Mode settings", e)
+            "Failed to access Airplane Mode controls."
+        }
+    }
 }
+

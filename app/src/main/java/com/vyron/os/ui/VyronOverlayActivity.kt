@@ -645,15 +645,29 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 }
                 "NET_TOGGLE" -> {
                     val enabled = value.contains("ON", ignoreCase = true)
-                    val resultText = if (value.contains("WIFI", ignoreCase = true)) {
-                        com.vyron.os.automation.NetworkController.toggleWifi(context, enabled)
-                    } else if (value.contains("BT", ignoreCase = true) || value.contains("BLUETOOTH", ignoreCase = true)) {
-                        com.vyron.os.automation.NetworkController.toggleBluetooth(context, enabled)
-                    } else {
-                        "Invalid network toggle command, Boss."
+                    val resultText = when {
+                        value.contains("WIFI", ignoreCase = true) -> {
+                            com.vyron.os.automation.NetworkController.toggleWifi(context, enabled)
+                        }
+                        value.contains("BT", ignoreCase = true) || value.contains("BLUETOOTH", ignoreCase = true) -> {
+                            com.vyron.os.automation.NetworkController.toggleBluetooth(context, enabled)
+                        }
+                        value.contains("DATA", ignoreCase = true) || value.contains("MOBILE", ignoreCase = true) -> {
+                            com.vyron.os.automation.NetworkController.toggleMobileData(context)
+                        }
+                        value.contains("HOTSPOT", ignoreCase = true) || value.contains("TETHER", ignoreCase = true) -> {
+                            com.vyron.os.automation.NetworkController.toggleHotspot(context)
+                        }
+                        value.contains("AIRPLANE", ignoreCase = true) -> {
+                            com.vyron.os.automation.NetworkController.toggleAirplaneMode(context)
+                        }
+                        else -> {
+                            "Invalid network toggle command, Boss."
+                        }
                     }
                     speakReply(resultText)
                 }
+
                 "SCREEN_SCAN" -> {
                     val screenText = com.vyron.os.automation.VyronAccessibilityService.instance?.scanActiveScreen()
                     if (screenText.isNullOrEmpty() || screenText.contains("not accessible")) {
@@ -752,9 +766,51 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     speakReply("Got it! Reminder set for $value: $text")
                     ReminderManager.setSmartReminder(context, value, text)
                 }
+                "WHATSAPP_CALL" -> {
+                    speakReply("Placing WhatsApp audio call to $value.")
+                    TelephonyAndMessaging.initiateWhatsAppVoiceCall(context, value)
+                }
+                "WHATSAPP_VIDEO" -> {
+                    speakReply("Placing WhatsApp video call to $value.")
+                    TelephonyAndMessaging.initiateWhatsAppVideoCall(context, value)
+                }
+                "LOCK_SCREEN" -> {
+                    VyronAccessibilityService.instance?.let {
+                        val intent = Intent(it, VyronAccessibilityService::class.java).apply {
+                            action = VyronAccessibilityService.ACTION_LOCK_SCREEN
+                        }
+                        it.startService(intent)
+                        speakReply("Locking the device securely.")
+                    } ?: run {
+                        speakReply("Accessibility permission needed to lock device.")
+                    }
+                }
+                "POWER_MENU" -> {
+                    VyronAccessibilityService.instance?.let {
+                        val intent = Intent(it, VyronAccessibilityService::class.java).apply {
+                            action = VyronAccessibilityService.ACTION_POWER_MENU
+                        }
+                        it.startService(intent)
+                        speakReply("Displaying system power options.")
+                    } ?: run {
+                        speakReply("Accessibility permission needed.")
+                    }
+                }
+                "GO_HOME" -> {
+                    VyronAccessibilityService.instance?.let {
+                        val intent = Intent(it, VyronAccessibilityService::class.java).apply {
+                            action = VyronAccessibilityService.ACTION_NAVIGATE_HOME
+                        }
+                        it.startService(intent)
+                        speakReply("Returning home, Boss.")
+                    } ?: run {
+                        speakReply("Please enable Accessibility service first.")
+                    }
+                }
                 "ASSISTANT" -> {
                     speakReply(text)
                 }
+
                 else -> {
                     speakReply("Intent classified as $intent. I'll execute it, Boss.")
                 }
