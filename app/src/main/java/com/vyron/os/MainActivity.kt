@@ -201,6 +201,9 @@ class MainActivity : ComponentActivity() {
         var testCommandText by remember { mutableStateOf("") }
         val securePref = remember { getSecureSharedPreferences(this@MainActivity) }
         var geminiApiKey by remember { mutableStateOf(securePref.getString("gemini_api_key", "") ?: "") }
+        var picovoiceAccessKey by remember { mutableStateOf(securePref.getString("picovoice_access_key", "") ?: "") }
+        var googleTtsApiKey by remember { mutableStateOf(securePref.getString("google_tts_api_key", "") ?: "") }
+
 
         Column(
             modifier = Modifier
@@ -329,6 +332,147 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Picovoice Access Key Card
+                Text(
+                    text = "🔑 PICOVOICE WAKE WORD ENGINE",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.5.sp
+                )
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Color(0xFF1F2937), RoundedCornerShape(12.dp)),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF09090C))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "Enter your Picovoice Access Key for offline, zero-beep wake-up detection.",
+                            color = Color(0xFF9CA3AF),
+                            fontSize = 11.sp
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = picovoiceAccessKey,
+                                onValueChange = { picovoiceAccessKey = it },
+                                placeholder = { Text("Picovoice Key...", color = Color(0xFF4B5563)) },
+                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                colors = TextFieldDefaults.outlinedTextFieldColors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = Color(0xFF10B981),
+                                    unfocusedBorderColor = Color(0xFF1F2937)
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(55.dp),
+                                shape = RoundedCornerShape(10.dp)
+                            )
+
+                            Spacer(modifier = Modifier.width(10.dp))
+
+                            Button(
+                                onClick = {
+                                    if (picovoiceAccessKey.trim().isNotEmpty()) {
+                                        val securePref = getSecureSharedPreferences(this@MainActivity)
+                                        securePref.edit().putString("picovoice_access_key", picovoiceAccessKey.trim()).apply()
+                                        Toast.makeText(this@MainActivity, "Picovoice Key Saved Securely!", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(this@MainActivity, "Please enter a valid key", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                modifier = Modifier.height(55.dp),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("SAVE", color = Color.Black, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Google Cloud TTS Key Card
+                Text(
+                    text = "🗣️ GOOGLE CLOUD TTS API (OPTIONAL)",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.5.sp
+                )
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Color(0xFF1F2937), RoundedCornerShape(12.dp)),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF09090C))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "Enter a dedicated Google Cloud TTS Key for premium Chirp3-HD voices. If empty, local neural TTS is used.",
+                            color = Color(0xFF9CA3AF),
+                            fontSize = 11.sp
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = googleTtsApiKey,
+                                onValueChange = { googleTtsApiKey = it },
+                                placeholder = { Text("Google Cloud Key...", color = Color(0xFF4B5563)) },
+                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                colors = TextFieldDefaults.outlinedTextFieldColors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = Color(0xFFF59E0B),
+                                    unfocusedBorderColor = Color(0xFF1F2937)
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(55.dp),
+                                shape = RoundedCornerShape(10.dp)
+                            )
+
+                            Spacer(modifier = Modifier.width(10.dp))
+
+                            Button(
+                                onClick = {
+                                    val securePref = getSecureSharedPreferences(this@MainActivity)
+                                    securePref.edit().putString("google_tts_api_key", googleTtsApiKey.trim()).apply()
+                                    Toast.makeText(this@MainActivity, "Google TTS Key Saved Securely!", Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B)),
+                                modifier = Modifier.height(55.dp),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("SAVE", color = Color.Black, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
 
                 Spacer(modifier = Modifier.height(16.dp))
 

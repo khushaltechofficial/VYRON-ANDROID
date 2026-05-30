@@ -53,12 +53,43 @@
             android:excludeFromRecents="true"
             android:theme="@style/Theme.VyronOS.TranslucentOverlay" />
 
+        <!-- Transparent Assist Shortcut Entry Activity -->
+        <activity
+            android:name=".services.VyronAssistActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.VyronOS.TranslucentOverlay">
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <!-- Continuous Speech/Wake-Word Background Service -->
         <service
             android:name=".services.VyronWakeWordService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- System Digital Assistant Voice Interaction Services -->
+        <service
+            android:name=".services.VyronVoiceInteractionService"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true">
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/vyron_voice_interaction_service" />
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".services.VyronVoiceInteractionSessionService"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true" />
 
         <!-- Accessibility Automation Service (Return Home, Shutter, WhatsApp, Lock Screen) -->
         <service
@@ -78,6 +109,7 @@
             android:name=".services.ReminderReceiver"
             android:enabled="true"
             android:exported="false" />
+
 
     </application>
 

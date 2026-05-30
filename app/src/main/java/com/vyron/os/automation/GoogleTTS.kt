@@ -18,7 +18,8 @@ import java.net.URL
 object GoogleTTS {
     private const val TAG = "GoogleTTS"
 
-    suspend fun speak(context: Context, text: String, apiKey: String) = withContext(Dispatchers.IO) {
+    suspend fun speak(context: Context, text: String, apiKey: String): Boolean = withContext(Dispatchers.IO) {
+        if (apiKey.isEmpty()) return@withContext false
         try {
             val url = URL("https://texttospeech.googleapis.com/v1beta1/text:synthesize?key=$apiKey")
             val conn = url.openConnection() as HttpURLConnection
@@ -51,14 +52,18 @@ object GoogleTTS {
                 val audioBytes = Base64.decode(audioContentBase64, Base64.DEFAULT)
                 
                 playAudioBytes(audioBytes)
+                true
             } else {
                 val errText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
                 Log.e(TAG, "Google TTS failed: Code $responseCode, error: $errText")
+                false
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in GoogleTTS speak", e)
+            false
         }
     }
+
 
     private fun playAudioBytes(audioBytes: ByteArray) {
         val sampleRate = 24000

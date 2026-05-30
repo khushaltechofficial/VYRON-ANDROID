@@ -811,54 +811,67 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         unmuteBeep()
 
         val securePref = com.vyron.os.getSecureSharedPreferences(this)
-        val apiKey = securePref.getString("gemini_api_key", "") ?: ""
+        val ttsApiKey = securePref.getString("google_tts_api_key", "") ?: ""
 
-        if (apiKey.isNotEmpty()) {
+        if (ttsApiKey.isNotEmpty()) {
             lifecycleScope.launch(Dispatchers.Main) {
                 // Speak using the high-definition Cloud Chirp3-HD Fenrir voice!
-                com.vyron.os.automation.GoogleTTS.speak(this@VyronOverlayActivity, replyText, apiKey)
+                val success = com.vyron.os.automation.GoogleTTS.speak(this@VyronOverlayActivity, replyText, ttsApiKey)
                 
-                // Greeting done -> 500ms wait -> listening start
-                if (utteranceId == "VyronGreetingID") {
-                    android.os.Handler(mainLooper).postDelayed({
-                        userSpeech = "Listening..."
-                        vyronReply = ""
-                        currentStatus = "LISTENING"
-                        initializeSpeechRecognizer()
-                    }, 500L)
-                } else if (utteranceId == "VyronSpeechID") {
-                    if (closeAfter) {
-                        // Speech done -> 2000ms wait -> close
+                if (success) {
+                    // Greeting done -> 500ms wait -> listening start
+                    if (utteranceId == "VyronGreetingID") {
                         android.os.Handler(mainLooper).postDelayed({
-                            closeOverlay()
-                        }, 2000L)
+                            userSpeech = "Listening..."
+                            vyronReply = ""
+                            currentStatus = "LISTENING"
+                            initializeSpeechRecognizer()
+                        }, 500L)
+                    } else if (utteranceId == "VyronSpeechID") {
+                        if (closeAfter) {
+                            // Speech done -> 2000ms wait -> close
+                            android.os.Handler(mainLooper).postDelayed({
+                                closeOverlay()
+                            }, 2000L)
+                        }
                     }
+                } else {
+                    Log.e(TAG, "GoogleTTS synthesis failed, falling back to local TTS engine.")
+                    speakLocalFallback(replyText, utteranceId, closeAfter)
                 }
             }
         } else {
-            // Local TTS Fallback
-            if (!isTtsInitialized) {
-                synchronized(pendingSpeechQueue) {
-                    pendingSpeechQueue.add(replyText)
-                }
-                vyronReply = replyText
-                currentStatus = "THINKING"
-                return
-            }
-
-            val params = Bundle().apply {
-                putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
-            }
-            tts?.speak(replyText, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
-
-            // Safe maximum backup safety delay
-            if (utteranceId == "VyronSpeechID" && closeAfter) {
-                mHandler.removeCallbacks(closeOverlayRunnable)
-                val safetyDelay = maxOf(25000L, replyText.length * 100L)
-                mHandler.postDelayed(closeOverlayRunnable, safetyDelay)
-            }
+            speakLocalFallback(replyText, utteranceId, closeAfter)
         }
     }
+
+    private fun speakLocalFallback(
+        replyText: String,
+        utteranceId: String,
+        closeAfter: Boolean
+    ) {
+        if (!isTtsInitialized) {
+            synchronized(pendingSpeechQueue) {
+                pendingSpeechQueue.add(replyText)
+            }
+            vyronReply = replyText
+            currentStatus = "THINKING"
+            return
+        }
+
+        val params = Bundle().apply {
+            putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
+        }
+        tts?.speak(replyText, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
+
+        // Safe maximum backup safety delay
+        if (utteranceId == "VyronSpeechID" && closeAfter) {
+            mHandler.removeCallbacks(closeOverlayRunnable)
+            val safetyDelay = maxOf(25000L, replyText.length * 100L)
+            mHandler.postDelayed(closeOverlayRunnable, safetyDelay)
+        }
+    }
+
 
     private fun closeOverlay() {
         mHandler.removeCallbacks(closeOverlayRunnable)
