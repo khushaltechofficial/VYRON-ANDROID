@@ -235,17 +235,19 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     when (utteranceId) {
                         "VyronGreetingID" -> {
                             android.os.Handler(mainLooper).post {
-                                userSpeech = "Listening..."
-                                vyronReply = ""
-                                currentStatus = "LISTENING"
-                                initializeSpeechRecognizer()
+                                android.os.Handler(mainLooper).postDelayed({
+                                    userSpeech = "Listening..."
+                                    vyronReply = ""
+                                    currentStatus = "LISTENING"
+                                    initializeSpeechRecognizer()
+                                }, 500L)
                             }
                         }
                         "VyronSpeechID" -> {
                             android.os.Handler(mainLooper).post {
                                 android.os.Handler(mainLooper).postDelayed({
                                     closeOverlay()
-                                }, 1000L)
+                                }, 2000L)
                             }
                         }
                     }
@@ -799,31 +801,62 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         closeOverlay()
     }
 
-    private fun speakReply(replyText: String, utteranceId: String = "VyronSpeechID") {
-        if (!isTtsInitialized) {
-            synchronized(pendingSpeechQueue) {
-                pendingSpeechQueue.add(replyText)
-            }
-            // Temporarily print it on overlay so the user sees it immediately
-            vyronReply = replyText
-            currentStatus = "THINKING"
-            return
-        }
-
+    private fun speakReply(
+        replyText: String, 
+        utteranceId: String = "VyronSpeechID",
+        closeAfter: Boolean = true
+    ) {
         vyronReply = replyText
         currentStatus = "SPEAKING"
         unmuteBeep()
-        
-        val params = Bundle().apply {
-            putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
-        }
-        tts?.speak(replyText, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
 
-        // Safe maximum backup safety delay of 25 seconds or proportional to length (whichever is larger) in case UtteranceProgressListener hangs
-        if (utteranceId == "VyronSpeechID") {
-            mHandler.removeCallbacks(closeOverlayRunnable)
-            val safetyDelay = maxOf(25000L, replyText.length * 100L)
-            mHandler.postDelayed(closeOverlayRunnable, safetyDelay)
+        val securePref = com.vyron.os.getSecureSharedPreferences(this)
+        val apiKey = securePref.getString("gemini_api_key", "") ?: ""
+
+        if (apiKey.isNotEmpty()) {
+            lifecycleScope.launch(Dispatchers.Main) {
+                // Speak using the high-definition Cloud Chirp3-HD Fenrir voice!
+                com.vyron.os.automation.GoogleTTS.speak(this@VyronOverlayActivity, replyText, apiKey)
+                
+                // Greeting done -> 500ms wait -> listening start
+                if (utteranceId == "VyronGreetingID") {
+                    android.os.Handler(mainLooper).postDelayed({
+                        userSpeech = "Listening..."
+                        vyronReply = ""
+                        currentStatus = "LISTENING"
+                        initializeSpeechRecognizer()
+                    }, 500L)
+                } else if (utteranceId == "VyronSpeechID") {
+                    if (closeAfter) {
+                        // Speech done -> 2000ms wait -> close
+                        android.os.Handler(mainLooper).postDelayed({
+                            closeOverlay()
+                        }, 2000L)
+                    }
+                }
+            }
+        } else {
+            // Local TTS Fallback
+            if (!isTtsInitialized) {
+                synchronized(pendingSpeechQueue) {
+                    pendingSpeechQueue.add(replyText)
+                }
+                vyronReply = replyText
+                currentStatus = "THINKING"
+                return
+            }
+
+            val params = Bundle().apply {
+                putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
+            }
+            tts?.speak(replyText, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
+
+            // Safe maximum backup safety delay
+            if (utteranceId == "VyronSpeechID" && closeAfter) {
+                mHandler.removeCallbacks(closeOverlayRunnable)
+                val safetyDelay = maxOf(25000L, replyText.length * 100L)
+                mHandler.postDelayed(closeOverlayRunnable, safetyDelay)
+            }
         }
     }
 
@@ -972,6 +1005,13 @@ class VyronOverlayActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 val context = LocalContext.current
                 var manualTypedText by remember { mutableStateOf("") }
                 val focusRequester = remember { FocusRequester() }
+
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(500)
+                    try {
+                        focusRequester.requestFocus()
+                    } catch (_: Exception) {}
+                }
 
                 Column(
                     modifier = Modifier

@@ -86,6 +86,9 @@ dependencies {
     // Security & Encrypted SharedPreferences
     implementation("androidx.security:security-crypto:1.0.0")
 
+    // Picovoice Porcupine Wake Word Engine
+    implementation("ai.picovoice:porcupine-android:3.0.2")
+
 
     // CameraX (For hands-free photo taking, shutter control, camera switching)
     val cameraxVersion = "1.3.1"

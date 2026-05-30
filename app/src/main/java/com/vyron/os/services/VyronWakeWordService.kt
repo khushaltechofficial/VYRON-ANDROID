@@ -296,7 +296,12 @@ class VyronWakeWordService : Service() {
                 CHANNEL_ID,
                 "VYRON Wake Word",
                 NotificationManager.IMPORTANCE_LOW
-            ).apply { setSound(null, null) }  // No sound on channel
+            ).apply {
+                setSound(null, null)
+                enableVibration(false)
+                vibrationPattern = null
+                enableLights(false)
+            }
             getSystemService(NotificationManager::class.java)
                 .createNotificationChannel(ch)
         }
